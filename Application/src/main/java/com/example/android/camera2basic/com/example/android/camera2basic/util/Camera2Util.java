@@ -22,7 +22,6 @@ import android.app.Dialog;
 import android.app.DialogFragment;
 import android.content.Context;
 import android.content.DialogInterface;
-import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -48,11 +47,9 @@ import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
-import android.view.View;
 import android.widget.Toast;
 
 import com.example.android.camera2basic.AutoFitSurfaceView;
-import com.example.android.camera2basic.R;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -224,6 +221,8 @@ public class Camera2Util {
      */
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
 
+    private CameraManager mCameraManager;
+
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
      */
@@ -345,15 +344,11 @@ public class Camera2Util {
         }
     }
 
-    public Camera2Util(Activity activity, TextureView textureView) {
+    public Camera2Util(Activity activity, TextureView textureView, CameraManager manager) {
         mActivity = activity;
         mTextureView = textureView;
+        mCameraManager = manager;
         mFile = new File(mActivity.getExternalFilesDir(null), "pic.jpg");
-    }
-
-    public static Camera2Util newInstance(Activity activity) {
-        Camera2Util camera2Util = new Camera2Util(activity, null);
-        return camera2Util;
     }
 
     /**
@@ -363,13 +358,12 @@ public class Camera2Util {
      * @param height The height of available size for camera preview
      */
     private Size setUpCameraOutputs(int width, int height) {
-        CameraManager manager = (CameraManager) mActivity.getSystemService(Context.CAMERA_SERVICE);
 
         Size previewSize = null;
         try {
-            for (String cameraId : manager.getCameraIdList()) {
+            for (String cameraId : mCameraManager.getCameraIdList()) {
                 CameraCharacteristics characteristics
-                        = manager.getCameraCharacteristics(cameraId);
+                        = mCameraManager.getCameraCharacteristics(cameraId);
 
                 // We don't use a front facing camera in this sample.
                 if (characteristics.get(CameraCharacteristics.LENS_FACING)
@@ -418,12 +412,11 @@ public class Camera2Util {
         Log.i(TAG, " ***** openCamera height:[" + height + "] width:[" + width + "]");
         mPreviewSize = setUpCameraOutputs(width, height);
         configureTransform(width, height);
-        CameraManager manager = (CameraManager) mActivity.getSystemService(Context.CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
-            manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
+            mCameraManager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
