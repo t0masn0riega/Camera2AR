@@ -106,7 +106,19 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
-            mCamera2Util.openCamera(width, height);
+            Size previewSize = mCamera2Util.openCamera(width, height);
+
+            // We fit the aspect ratio of TextureView to the size of preview we picked.
+            int orientation = getActivity().getResources().getConfiguration().orientation;
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                mTextureView.setAspectRatio(
+                        previewSize.getWidth(), previewSize.getHeight());
+            } else {
+                mTextureView.setAspectRatio(
+                        previewSize.getHeight(), previewSize.getWidth());
+            }
+
+
         }
 
         @Override
@@ -159,7 +171,18 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener).
         if (mTextureView.isAvailable()) {
-            mCamera2Util.openCamera(mTextureView.getWidth(), mTextureView.getHeight());
+            Size previewSize = mCamera2Util.openCamera(mTextureView.getWidth(), mTextureView.getHeight());
+
+            // We fit the aspect ratio of TextureView to the size of preview we picked.
+            int orientation = getActivity().getResources().getConfiguration().orientation;
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                mTextureView.setAspectRatio(
+                        previewSize.getWidth(), previewSize.getHeight());
+            } else {
+                mTextureView.setAspectRatio(
+                        previewSize.getHeight(), previewSize.getWidth());
+            }
+
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }

@@ -118,7 +118,7 @@ public class Camera2Util {
     /**
      * An {@link AutoFitSurfaceView} for camera preview.
      */
-    private AutoFitSurfaceView mTextureView;
+    private TextureView mTextureView;
 
     /**
      * A {@link CameraCaptureSession } for camera preview.
@@ -345,7 +345,7 @@ public class Camera2Util {
         }
     }
 
-    public Camera2Util(Activity activity, AutoFitSurfaceView textureView) {
+    public Camera2Util(Activity activity, TextureView textureView) {
         mActivity = activity;
         mTextureView = textureView;
         mFile = new File(mActivity.getExternalFilesDir(null), "pic.jpg");
@@ -362,8 +362,10 @@ public class Camera2Util {
      * @param width  The width of available size for camera preview
      * @param height The height of available size for camera preview
      */
-    private void setUpCameraOutputs(int width, int height) {
+    private Size setUpCameraOutputs(int width, int height) {
         CameraManager manager = (CameraManager) mActivity.getSystemService(Context.CAMERA_SERVICE);
+
+        Size previewSize = null;
         try {
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
@@ -390,21 +392,11 @@ public class Camera2Util {
                 // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
                 // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
                 // garbage capture data.
-                mPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
+                previewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
                         width, height, largest);
 
-                // We fit the aspect ratio of TextureView to the size of preview we picked.
-                int orientation = mActivity.getResources().getConfiguration().orientation;
-                if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                    mTextureView.setAspectRatio(
-                            mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                } else {
-                    mTextureView.setAspectRatio(
-                            mPreviewSize.getHeight(), mPreviewSize.getWidth());
-                }
-
                 mCameraId = cameraId;
-                return;
+                break;
             }
         } catch (CameraAccessException e) {
             e.printStackTrace();
@@ -413,16 +405,18 @@ public class Camera2Util {
             // device this code runs.
             new ErrorDialog().show(mActivity.getFragmentManager(), "dialog");
         }
+
+        return previewSize;
     }
 
     /**
      * Opens the camera specified by {@link Camera2Util#mCameraId}.
      */
-    public void openCamera(int width, int height) {
+    public Size openCamera(int width, int height) {
         startBackgroundThread();
 
         Log.i(TAG, " ***** openCamera height:[" + height + "] width:[" + width + "]");
-        setUpCameraOutputs(width, height);
+        mPreviewSize = setUpCameraOutputs(width, height);
         configureTransform(width, height);
         CameraManager manager = (CameraManager) mActivity.getSystemService(Context.CAMERA_SERVICE);
         try {
@@ -435,6 +429,8 @@ public class Camera2Util {
         } catch (InterruptedException e) {
             throw new RuntimeException("Interrupted while trying to lock camera opening.", e);
         }
+
+        return mPreviewSize;
     }
 
     /**
