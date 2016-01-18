@@ -111,34 +111,6 @@ public class Camera2Util {
     Activity mActivity;
 
     /**
-     * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
-     * {@link TextureView}.
-     */
-    private final TextureView.SurfaceTextureListener mSurfaceTextureListener
-            = new TextureView.SurfaceTextureListener() {
-
-        @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
-            openCamera(width, height);
-        }
-
-        @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
-            configureTransform(width, height);
-        }
-
-        @Override
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture texture) {
-            return true;
-        }
-
-        @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture texture) {
-        }
-
-    };
-
-    /**
      * ID of the current {@link CameraDevice}.
      */
     private String mCameraId;
@@ -384,25 +356,6 @@ public class Camera2Util {
         return camera2Util;
     }
 
-    public void onActifityResume() {
-        startBackgroundThread();
-
-        // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
-        // a camera and start preview from here (otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener).
-        if (mTextureView.isAvailable()) {
-            openCamera(mTextureView.getWidth(), mTextureView.getHeight());
-        } else {
-            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
-        }
-    }
-
-    public void onActifityPause() {
-        closeCamera();
-        stopBackgroundThread();
-    }
-
     /**
      * Sets up member variables related to camera.
      *
@@ -465,7 +418,9 @@ public class Camera2Util {
     /**
      * Opens the camera specified by {@link Camera2Util#mCameraId}.
      */
-    private void openCamera(int width, int height) {
+    public void openCamera(int width, int height) {
+        startBackgroundThread();
+
         Log.i(TAG, " ***** openCamera height:[" + height + "] width:[" + width + "]");
         setUpCameraOutputs(width, height);
         configureTransform(width, height);
@@ -485,7 +440,7 @@ public class Camera2Util {
     /**
      * Closes the current {@link CameraDevice}.
      */
-    private void closeCamera() {
+    public void closeCamera() {
         try {
             mCameraOpenCloseLock.acquire();
             if (null != mCaptureSession) {
@@ -505,6 +460,8 @@ public class Camera2Util {
         } finally {
             mCameraOpenCloseLock.release();
         }
+
+        stopBackgroundThread();
     }
 
     /**
@@ -598,7 +555,7 @@ public class Camera2Util {
      * @param viewWidth  The width of `mTextureView`
      * @param viewHeight The height of `mTextureView`
      */
-    private void configureTransform(int viewWidth, int viewHeight) {
+    public void configureTransform(int viewWidth, int viewHeight) {
         if (null == mTextureView || null == mPreviewSize || null == mActivity) {
             return;
         }
