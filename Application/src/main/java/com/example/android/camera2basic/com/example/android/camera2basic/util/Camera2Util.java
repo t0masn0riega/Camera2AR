@@ -20,7 +20,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.DialogFragment;
-import android.content.Context;
 import android.content.DialogInterface;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
@@ -105,8 +104,6 @@ public class Camera2Util {
      */
     private static final int STATE_PICTURE_TAKEN = 4;
 
-    Activity mActivity;
-
     /**
      * ID of the current {@link CameraDevice}.
      */
@@ -158,9 +155,6 @@ public class Camera2Util {
             mCameraOpenCloseLock.release();
             cameraDevice.close();
             mCameraDevice = null;
-            if (null != mActivity) {
-                mActivity.finish();
-            }
         }
 
     };
@@ -222,6 +216,10 @@ public class Camera2Util {
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
 
     private CameraManager mCameraManager;
+
+    private int mRotation;
+
+    private Handler mMessageHandler;
 
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
@@ -288,18 +286,6 @@ public class Camera2Util {
     };
 
     /**
-     * A {@link Handler} for showing {@link Toast}s.
-     */
-    private Handler mMessageHandler = new Handler() {
-        @Override
-        public void handleMessage(Message msg) {
-            if (mActivity != null) {
-                Toast.makeText(mActivity, (String) msg.obj, Toast.LENGTH_SHORT).show();
-            }
-        }
-    };
-
-    /**
      * Shows a {@link Toast} on the UI thread.
      *
      * @param text The message to show
@@ -309,7 +295,9 @@ public class Camera2Util {
         // Toast is shown on the UI thread.
         Message message = Message.obtain();
         message.obj = text;
-        mMessageHandler.sendMessage(message);
+        if (mMessageHandler != null) {
+            mMessageHandler.sendMessage(message);
+        }
     }
 
     /**
@@ -344,11 +332,10 @@ public class Camera2Util {
         }
     }
 
-    public Camera2Util(Activity activity, TextureView textureView, CameraManager manager) {
-        mActivity = activity;
+    public Camera2Util(TextureView textureView, CameraManager manager, Handler messageHandler) {
         mTextureView = textureView;
         mCameraManager = manager;
-        mFile = new File(mActivity.getExternalFilesDir(null), "pic.jpg");
+        mMessageHandler = messageHandler;
     }
 
     /**
@@ -394,10 +381,6 @@ public class Camera2Util {
             }
         } catch (CameraAccessException e) {
             e.printStackTrace();
-        } catch (NullPointerException e) {
-            // Currently an NPE is thrown when the Camera2API is used but not supported on the
-            // device this code runs.
-            new ErrorDialog().show(mActivity.getFragmentManager(), "dialog");
         }
 
         return previewSize;
@@ -406,12 +389,12 @@ public class Camera2Util {
     /**
      * Opens the camera specified by {@link Camera2Util#mCameraId}.
      */
-    public Size openCamera(int width, int height) {
+    public Size openCamera(int width, int height, int orientation) {
         startBackgroundThread();
 
-        Log.i(TAG, " ***** openCamera height:[" + height + "] width:[" + width + "]");
+        Log.i(TAG, " ***** openCamera height:[" + height + "] width:[" + width + "] orientation:[" + orientation + "]");
         mPreviewSize = setUpCameraOutputs(width, height);
-        configureTransform(width, height);
+        configureTransform(width, height, orientation);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
@@ -540,36 +523,38 @@ public class Camera2Util {
      * Configures the necessary {@link Matrix} transformation to `mTextureView`.
      * This method should be called after the camera preview size is determined in
      * setUpCameraOutputs and also the size of `mTextureView` is fixed.
-     *
-     * @param viewWidth  The width of `mTextureView`
+     *  @param viewWidth  The width of `mTextureView`
      * @param viewHeight The height of `mTextureView`
+     * @param viewRotation
      */
-    public void configureTransform(int viewWidth, int viewHeight) {
-        if (null == mTextureView || null == mPreviewSize || null == mActivity) {
+    public void configureTransform(int viewWidth, int viewHeight, int viewRotation) {
+        if (null == mTextureView || null == mPreviewSize) {
             return;
         }
-        int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
+        mRotation = viewRotation;
         Matrix matrix = new Matrix();
         RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
         RectF bufferRect = new RectF(0, 0, mPreviewSize.getHeight(), mPreviewSize.getWidth());
         float centerX = viewRect.centerX();
         float centerY = viewRect.centerY();
-        if (Surface.ROTATION_90 == rotation || Surface.ROTATION_270 == rotation) {
+        if (Surface.ROTATION_90 == mRotation || Surface.ROTATION_270 == mRotation) {
             bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
             matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
             float scale = Math.max(
                     (float) viewHeight / mPreviewSize.getHeight(),
                     (float) viewWidth / mPreviewSize.getWidth());
             matrix.postScale(scale, scale, centerX, centerY);
-            matrix.postRotate(90 * (rotation - 2), centerX, centerY);
+            matrix.postRotate(90 * (mRotation - 2), centerX, centerY);
         }
         mTextureView.setTransform(matrix);
     }
 
     /**
      * Initiate a still image capture.
+     * @param picFile
      */
-    public void takePicture() {
+    public void takePicture(File picFile) {
+        mFile = picFile;
         lockFocus();
     }
 
@@ -614,7 +599,7 @@ public class Camera2Util {
      */
     private void captureStillPicture() {
         try {
-            if (null == mActivity || null == mCameraDevice) {
+            if (null == mCameraDevice) {
                 return;
             }
             // This is the CaptureRequest.Builder that we use to take a picture.
@@ -629,8 +614,7 @@ public class Camera2Util {
                     CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
 
             // Orientation
-            int rotation = mActivity.getWindowManager().getDefaultDisplay().getRotation();
-            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(rotation));
+            captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, ORIENTATIONS.get(mRotation));
 
             CameraCaptureSession.CaptureCallback CaptureCallback
                     = new CameraCaptureSession.CaptureCallback() {

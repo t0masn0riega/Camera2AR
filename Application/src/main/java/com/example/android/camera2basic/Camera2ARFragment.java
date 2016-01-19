@@ -29,14 +29,19 @@ import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Message;
 import android.util.Log;
 import android.util.Size;
 import android.view.LayoutInflater;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Toast;
 
 import com.example.android.camera2basic.com.example.android.camera2basic.util.Camera2Util;
+
+import java.io.File;
 
 public class Camera2ARFragment extends Fragment implements View.OnClickListener {
 
@@ -75,7 +80,8 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
-            Size previewSize = mCamera2Util.openCamera(width, height);
+            int viewRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
+            Size previewSize = mCamera2Util.openCamera(width, height, viewRotation);
 
             // We fit the aspect ratio of TextureView to the size of preview we picked.
             int orientation = getActivity().getResources().getConfiguration().orientation;
@@ -92,7 +98,8 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
-            mCamera2Util.configureTransform(width, height);
+            int viewRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
+            mCamera2Util.configureTransform(width, height, viewRotation);
         }
 
         @Override
@@ -124,7 +131,7 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
         view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitSurfaceView) view.findViewById(R.id.texture);
         Log.i(TAG, " ***** onViewCreated mTextureView.getHeight():[" + mTextureView.getHeight() + "] mTextureView.getWidth():[" + mTextureView.getWidth() + "]");
-        mCamera2Util = new Camera2Util(getActivity(), mTextureView, (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE));
+        mCamera2Util = new Camera2Util(mTextureView, (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE), mMessageHandler);
     }
 
     @Override
@@ -140,7 +147,8 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener).
         if (mTextureView.isAvailable()) {
-            Size previewSize = mCamera2Util.openCamera(mTextureView.getWidth(), mTextureView.getHeight());
+            int viewRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
+            Size previewSize = mCamera2Util.openCamera(mTextureView.getWidth(), mTextureView.getHeight(), viewRotation);
 
             // We fit the aspect ratio of TextureView to the size of preview we picked.
             int orientation = getActivity().getResources().getConfiguration().orientation;
@@ -167,7 +175,9 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
     public void onClick(View view) {
         switch (view.getId()) {
             case R.id.picture: {
-                mCamera2Util.takePicture();
+                String picName = "pic.jpg";
+                File picFile = new File(getActivity().getExternalFilesDir(null), picName);
+                mCamera2Util.takePicture(picFile);
                 break;
             }
             case R.id.info: {
@@ -182,6 +192,17 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
             }
         }
     }
+
+    private Handler mMessageHandler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            Activity activity = getActivity();
+            if (activity != null) {
+                Toast.makeText(activity, (String) msg.obj, Toast.LENGTH_SHORT).show();
+            }
+        }
+    };
+
 
     public static class ErrorDialog extends DialogFragment {
 
