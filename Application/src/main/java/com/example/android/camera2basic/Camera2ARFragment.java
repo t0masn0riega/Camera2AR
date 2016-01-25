@@ -24,6 +24,8 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.res.Configuration;
+import android.graphics.Matrix;
+import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraCaptureSession;
 import android.hardware.camera2.CameraDevice;
@@ -34,6 +36,7 @@ import android.os.Message;
 import android.util.Log;
 import android.util.Size;
 import android.view.LayoutInflater;
+import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
@@ -71,6 +74,8 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
 
     private Camera2Util mCamera2Util;
 
+    private Size mPreviewSize;
+
     /**
      * {@link TextureView.SurfaceTextureListener} handles several lifecycle events on a
      * {@link TextureView}.
@@ -80,25 +85,14 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture texture, int width, int height) {
-            Size previewSize = mCamera2Util.openCamera(width, height);
-
-            // We fit the aspect ratio of TextureView to the size of preview we picked.
-            int orientation = getActivity().getResources().getConfiguration().orientation;
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mTextureView.setAspectRatio(
-                        previewSize.getWidth(), previewSize.getHeight());
-            } else {
-                mTextureView.setAspectRatio(
-                        previewSize.getHeight(), previewSize.getWidth());
-            }
-
-
+            mCamera2Util = new Camera2Util((CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE), mMessageHandler, getActivity().getWindowManager().getDefaultDisplay(), new Surface(texture));
+            openCamera(width, height);
         }
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture texture, int width, int height) {
             int viewRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
-            mCamera2Util.configureTransform(width, height);
+            configureTransform(width, height);
         }
 
         @Override
@@ -129,8 +123,6 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
         view.findViewById(R.id.picture).setOnClickListener(this);
         view.findViewById(R.id.info).setOnClickListener(this);
         mTextureView = (AutoFitSurfaceView) view.findViewById(R.id.texture);
-        Log.i(TAG, " ***** onViewCreated mTextureView.getHeight():[" + mTextureView.getHeight() + "] mTextureView.getWidth():[" + mTextureView.getWidth() + "]");
-        mCamera2Util = new Camera2Util(mTextureView, (CameraManager) getActivity().getSystemService(Context.CAMERA_SERVICE), mMessageHandler, getActivity().getWindowManager().getDefaultDisplay());
     }
 
     @Override
@@ -146,17 +138,7 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
         // a camera and start preview from here (otherwise, we wait until the surface is ready in
         // the SurfaceTextureListener).
         if (mTextureView.isAvailable()) {
-            Size previewSize = mCamera2Util.openCamera(mTextureView.getWidth(), mTextureView.getHeight());
-
-            // We fit the aspect ratio of TextureView to the size of preview we picked.
-            int orientation = getActivity().getResources().getConfiguration().orientation;
-            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-                mTextureView.setAspectRatio(
-                        previewSize.getWidth(), previewSize.getHeight());
-            } else {
-                mTextureView.setAspectRatio(
-                        previewSize.getHeight(), previewSize.getWidth());
-            }
+            openCamera(mTextureView.getWidth(), mTextureView.getHeight());
 
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
@@ -165,7 +147,9 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
 
     @Override
     public void onPause() {
-        mCamera2Util.closeCamera();
+        if (mCamera2Util != null) {
+            mCamera2Util.closeCamera();
+        }
         super.onPause();
     }
 
@@ -175,7 +159,9 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
             case R.id.picture: {
                 String picName = "pic.jpg";
                 File picFile = new File(getActivity().getExternalFilesDir(null), picName);
-                mCamera2Util.takePicture(picFile);
+                if (mCamera2Util != null) {
+                    mCamera2Util.takePicture(picFile);
+                }
                 break;
             }
             case R.id.info: {
@@ -219,5 +205,54 @@ public class Camera2ARFragment extends Fragment implements View.OnClickListener 
         }
 
     }
+
+    /**
+     * Configures the necessary {@link Matrix} transformation to `mTextureView`.
+     * This method should be called after the camera preview size is determined in
+     * setUpCameraOutputs and also the size of `mTextureView` is fixed.
+     * @param viewWidth  The width of `mTextureView`
+     * @param viewHeight The height of `mTextureView`
+     */
+    private void configureTransform(int viewWidth, int viewHeight) {
+        if (null == mTextureView || null == mPreviewSize) {
+            return;
+        }
+        int displayRotation = getActivity().getWindowManager().getDefaultDisplay().getRotation();
+        Matrix matrix = new Matrix();
+        RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
+        RectF bufferRect = new RectF(0, 0, mPreviewSize.getHeight(), mPreviewSize.getWidth());
+        float centerX = viewRect.centerX();
+        float centerY = viewRect.centerY();
+        if (Surface.ROTATION_90 == displayRotation || Surface.ROTATION_270 == displayRotation) {
+            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
+            matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
+            float scale = Math.max(
+                    (float) viewHeight / mPreviewSize.getHeight(),
+                    (float) viewWidth / mPreviewSize.getWidth());
+            matrix.postScale(scale, scale, centerX, centerY);
+            matrix.postRotate(90 * (displayRotation - 2), centerX, centerY);
+        }
+        mTextureView.setTransform(matrix);
+    }
+
+    private void openCamera(int width, int height) {
+        if (mCamera2Util != null) {
+            mPreviewSize = mCamera2Util.openCamera(width, height);
+            // We configure the size of default buffer to be the size of camera preview we want.
+            mTextureView.getSurfaceTexture().setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            configureTransform(width, height);
+
+            // We fit the aspect ratio of TextureView to the size of preview we picked.
+            int orientation = getActivity().getResources().getConfiguration().orientation;
+            if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+                mTextureView.setAspectRatio(
+                        mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            } else {
+                mTextureView.setAspectRatio(
+                        mPreviewSize.getHeight(), mPreviewSize.getWidth());
+            }
+        }
+    }
+
 
 }

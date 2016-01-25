@@ -111,11 +111,6 @@ public class Camera2Util {
     private String mCameraId;
 
     /**
-     * An {@link AutoFitSurfaceView} for camera preview.
-     */
-    private TextureView mTextureView;
-
-    /**
      * A {@link CameraCaptureSession } for camera preview.
      */
 
@@ -221,6 +216,8 @@ public class Camera2Util {
     private Handler mMessageHandler;
 
     private Display mDisplay;
+
+    private Surface mSurface;
 
     /**
      * A {@link CameraCaptureSession.CaptureCallback} that handles events related to JPEG capture.
@@ -333,11 +330,11 @@ public class Camera2Util {
         }
     }
 
-    public Camera2Util(TextureView textureView, CameraManager manager, Handler messageHandler, Display display) {
-        mTextureView = textureView;
+    public Camera2Util(CameraManager manager, Handler messageHandler, Display display, Surface surface) {
         mCameraManager = manager;
         mMessageHandler = messageHandler;
         mDisplay = display;
+        mSurface = surface;
     }
 
     /**
@@ -396,7 +393,6 @@ public class Camera2Util {
 
         Log.i(TAG, " ***** openCamera height:[" + height + "] width:[" + width + "]");
         mPreviewSize = setUpCameraOutputs(width, height);
-        configureTransform(width, height);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
@@ -466,22 +462,15 @@ public class Camera2Util {
      */
     private void createCameraPreviewSession() {
         try {
-            SurfaceTexture texture = mTextureView.getSurfaceTexture();
-            assert texture != null;
-
-            // We configure the size of default buffer to be the size of camera preview we want.
-            texture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-
-            // This is the output Surface we need to start preview.
-            Surface surface = new Surface(texture);
+            assert mSurface != null;
 
             // We set up a CaptureRequest.Builder with the output Surface.
             mPreviewRequestBuilder
                     = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-            mPreviewRequestBuilder.addTarget(surface);
+            mPreviewRequestBuilder.addTarget(mSurface);
 
             // Here, we create a CameraCaptureSession for camera preview.
-            mCameraDevice.createCaptureSession(Arrays.asList(surface, mImageReader.getSurface()),
+            mCameraDevice.createCaptureSession(Arrays.asList(mSurface, mImageReader.getSurface()),
                     new CameraCaptureSession.StateCallback() {
 
                         @Override
@@ -519,35 +508,6 @@ public class Camera2Util {
         } catch (CameraAccessException e) {
             e.printStackTrace();
         }
-    }
-
-    /**
-     * Configures the necessary {@link Matrix} transformation to `mTextureView`.
-     * This method should be called after the camera preview size is determined in
-     * setUpCameraOutputs and also the size of `mTextureView` is fixed.
-     * @param viewWidth  The width of `mTextureView`
-     * @param viewHeight The height of `mTextureView`
-     */
-    public void configureTransform(int viewWidth, int viewHeight) {
-        if (null == mTextureView || null == mPreviewSize) {
-            return;
-        }
-        int displayRotation = mDisplay.getRotation();
-        Matrix matrix = new Matrix();
-        RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
-        RectF bufferRect = new RectF(0, 0, mPreviewSize.getHeight(), mPreviewSize.getWidth());
-        float centerX = viewRect.centerX();
-        float centerY = viewRect.centerY();
-        if (Surface.ROTATION_90 == displayRotation || Surface.ROTATION_270 == displayRotation) {
-            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
-            matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
-            float scale = Math.max(
-                    (float) viewHeight / mPreviewSize.getHeight(),
-                    (float) viewWidth / mPreviewSize.getWidth());
-            matrix.postScale(scale, scale, centerX, centerY);
-            matrix.postRotate(90 * (displayRotation - 2), centerX, centerY);
-        }
-        mTextureView.setTransform(matrix);
     }
 
     /**
