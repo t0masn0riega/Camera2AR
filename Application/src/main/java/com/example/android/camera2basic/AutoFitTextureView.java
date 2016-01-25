@@ -18,28 +18,27 @@ package com.example.android.camera2basic;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.util.Log;
 import android.view.TextureView;
 
 /**
  * A {@link TextureView} that can be adjusted to a specified aspect ratio.
  */
-public class AutoFitSurfaceView extends TextureView {
+public class AutoFitTextureView extends TextureView {
 
     private static final String TAG = "AutoFitSurfaceView";
 
     private int mRatioWidth = 0;
     private int mRatioHeight = 0;
 
-    public AutoFitSurfaceView(Context context) {
+    public AutoFitTextureView(Context context) {
         this(context, null);
     }
 
-    public AutoFitSurfaceView(Context context, AttributeSet attrs) {
+    public AutoFitTextureView(Context context, AttributeSet attrs) {
         this(context, attrs, 0);
     }
 
-    public AutoFitSurfaceView(Context context, AttributeSet attrs, int defStyle) {
+    public AutoFitTextureView(Context context, AttributeSet attrs, int defStyle) {
         super(context, attrs, defStyle);
     }
 

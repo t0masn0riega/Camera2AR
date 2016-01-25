@@ -22,8 +22,6 @@ import android.app.Dialog;
 import android.app.DialogFragment;
 import android.content.DialogInterface;
 import android.graphics.ImageFormat;
-import android.graphics.Matrix;
-import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCaptureSession;
@@ -46,10 +44,7 @@ import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Display;
 import android.view.Surface;
-import android.view.TextureView;
 import android.widget.Toast;
-
-import com.example.android.camera2basic.AutoFitSurfaceView;
 
 import java.io.File;
 import java.io.FileNotFoundException;

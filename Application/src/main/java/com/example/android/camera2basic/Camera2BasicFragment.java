@@ -142,9 +142,9 @@ public class Camera2BasicFragment extends Fragment implements View.OnClickListen
     private String mCameraId;
 
     /**
-     * An {@link AutoFitSurfaceView} for camera preview.
+     * An {@link AutoFitTextureView} for camera preview.
      */
-    private AutoFitSurfaceView mTextureView;
+    private AutoFitTextureView mTextureView;
 
     /**
      * A {@link CameraCaptureSession } for camera preview.
@@ -389,7 +389,7 @@ public class Camera2BasicFragment extends Fragment implements View.OnClickListen
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         view.findViewById(R.id.picture).setOnClickListener(this);
         view.findViewById(R.id.info).setOnClickListener(this);
-        mTextureView = (AutoFitSurfaceView) view.findViewById(R.id.texture);
+        mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
         Log.i(TAG, " ***** onViewCreated mTextureView.getHeight():[" + mTextureView.getHeight() + "] mTextureView.getWidth():[" + mTextureView.getWidth() + "]");
     }
 
